@@ -26,11 +26,12 @@ type Type string
 // webhook payload is not an Event until a parser has translated it —
 // vendor-specific codes/enums never survive into Data.
 type Event struct {
-	Source    Source
-	Type      Type
-	Severity  Severity
-	Timestamp time.Time
-	Data      any
+	Source     Source
+	Type       Type
+	Severity   Severity
+	Resolution bool
+	Timestamp  time.Time
+	Data       any
 }
 
 // New builds an Event stamped with the current time.
@@ -42,6 +43,15 @@ func New(source Source, eventType Type, severity Severity, data any) Event {
 		Timestamp: time.Now().UTC(),
 		Data:      data,
 	}
+}
+
+// NewResolution builds an Event stamped with the current time, marked as a
+// Resolution (see CONTEXT.md) — a prior problem ending, rather than a new
+// occurrence.
+func NewResolution(source Source, eventType Type, severity Severity, data any) Event {
+	e := New(source, eventType, severity, data)
+	e.Resolution = true
+	return e
 }
 
 // Subject returns the NATS subject an Event of the given source and type is

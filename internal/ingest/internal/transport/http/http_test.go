@@ -102,6 +102,12 @@ const unraidNormalPayload = `{
   "description": "The array was started successfully"
 }`
 
+const unraidResolutionPayload = `{
+  "importance": "normal",
+  "subject": "Notice [FERN] - Parity disk returned to normal temperature",
+  "description": "ST14000NM0121_ZKL2T0X9 (sde)"
+}`
+
 func TestSonarrDownload(t *testing.T) {
 	pub := &fakePublisher{}
 	srv := newTestServer(pub)
@@ -282,6 +288,32 @@ func TestUnraidNormal(t *testing.T) {
 	}
 	if events[0].Severity != event.SeverityInfo {
 		t.Fatalf("unexpected event: %+v", events[0])
+	}
+	if events[0].Resolution {
+		t.Fatalf("expected routine normal-importance event to not be a Resolution, got %+v", events[0])
+	}
+}
+
+func TestUnraidResolution(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "unraid", unraidResolutionPayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Severity != event.SeverityInfo {
+		t.Fatalf("unexpected severity: %+v", e)
+	}
+	if !e.Resolution {
+		t.Fatalf("expected 'returned to normal temperature' subject to be detected as a Resolution, got %+v", e)
 	}
 }
 

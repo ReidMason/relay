@@ -40,7 +40,7 @@ func handleWebhook(service *core.Service, logger *slog.Logger) http.HandlerFunc 
 			return
 		}
 
-		logger.Info("received webhook", "source", source)
+		logger.Info("received webhook", "source", source, "body", string(raw))
 
 		err = service.Handle(source, raw)
 		switch {

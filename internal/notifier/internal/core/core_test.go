@@ -84,6 +84,20 @@ func TestHandle_SonarrOnlyCritical(t *testing.T) {
 	}
 }
 
+func TestHandle_BelowFloor_ResolutionStillSent(t *testing.T) {
+	discord := &fakeChannel{}
+	svc := core.NewService(routesFixture(), map[core.ChannelName]core.Channel{core.ChannelDiscord: discord})
+
+	e := event.NewResolution(sourceUnraid, "array.event", event.SeverityInfo, nil)
+	if err := svc.Handle(e); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if len(discord.sent) != 1 {
+		t.Fatalf("expected resolution event to bypass MinSeverity floor, got %d sent", len(discord.sent))
+	}
+}
+
 func TestHandle_UnmatchedSource_NotSent(t *testing.T) {
 	discord := &fakeChannel{}
 	svc := core.NewService(routesFixture(), map[core.ChannelName]core.Channel{core.ChannelDiscord: discord})

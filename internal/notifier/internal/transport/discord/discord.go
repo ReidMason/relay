@@ -16,9 +16,12 @@ import (
 )
 
 const (
-	colorCritical = 0xE74C3C
-	colorWarning  = 0xF1C40F
-	colorInfo     = 0x95A5A6
+	colorCritical   = 0xE74C3C
+	colorWarning    = 0xF1C40F
+	colorInfo       = 0x95A5A6
+	colorResolution = 0x2ECC71
+
+	resolutionEmoji = "✅"
 )
 
 var severityEmoji = map[event.Severity]string{
@@ -71,16 +74,25 @@ func (a *Adapter) Send(e event.Event) error {
 	if s, ok := stringField(e.Data, "Subject"); ok {
 		title = s
 	}
-	title = fmt.Sprintf("%s %s", severityEmoji[e.Severity], title)
+	emoji := severityEmoji[e.Severity]
+	if e.Resolution {
+		emoji = resolutionEmoji
+	}
+	title = fmt.Sprintf("%s %s", emoji, title)
 
 	description, _ := stringField(e.Data, "Description")
+
+	color := colorFor(e.Severity)
+	if e.Resolution {
+		color = colorResolution
+	}
 
 	body := webhookBody{
 		Username: capitalize(string(e.Source)),
 		Embeds: []embed{{
 			Title:       title,
 			Description: description,
-			Color:       colorFor(e.Severity),
+			Color:       color,
 			Footer:      &footer{Text: string(e.Source)},
 			Fields:      fieldsFor(e.Data, e.Severity),
 		}},

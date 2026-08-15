@@ -153,6 +153,39 @@ func TestSend_NonNestedValue_JSONFallback(t *testing.T) {
 	}
 }
 
+func TestSend_Resolution_GreenColorAndMarker(t *testing.T) {
+	var captured webhookBody
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&captured)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	adapter := discord.New(server.URL)
+
+	e := event.Event{
+		Source:     "unraid",
+		Type:       "array.event",
+		Severity:   event.SeverityInfo,
+		Resolution: true,
+		Data: map[string]any{
+			"Subject": "Parity disk returned to normal temperature",
+		},
+	}
+
+	if err := adapter.Send(e); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	got := captured.Embeds[0]
+	if got.Color != 0x2ECC71 {
+		t.Errorf("color = %#x, want %#x (resolution/green)", got.Color, 0x2ECC71)
+	}
+	if got.Title != "✅ Parity disk returned to normal temperature" {
+		t.Errorf("title = %q, want resolution marker prefix", got.Title)
+	}
+}
+
 func TestSend_NonSuccessResponse_ReturnsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

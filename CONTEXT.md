@@ -47,3 +47,14 @@ The raw, vendor-shaped JSON a Source POSTs to `ingest`. Exists only inside a
 parser; never forwarded downstream and never stored in an Event's `Data`
 un-translated.
 _Avoid_: Request body, Raw event
+
+**Resolution**:
+A boolean dimension on Event, orthogonal to Severity, marking that the Event
+represents a prior problem ending (e.g. Unraid's disk-temperature warning
+being followed by a "returned to normal" message) rather than a new
+occurrence. Severity stays whatever urgency the vendor reports (usually
+`info`) — Resolution doesn't change what happened, it flags *why* a
+low-severity Event is still worth delivering. A parser decides Resolution
+using whatever real signal that vendor gives; notifier never infers it from
+Source/Type.
+_Avoid_: Recovery, Clear, Resolved-flag

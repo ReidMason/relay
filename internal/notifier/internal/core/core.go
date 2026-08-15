@@ -49,17 +49,19 @@ func NewService(routes []Route, channels map[ChannelName]Channel) *Service {
 }
 
 // Handle sends e to every Channel named by a Route whose Source matches
-// e.Source and whose MinSeverity is at or below e.Severity. Every matched
-// Channel is attempted even if an earlier one fails; a non-nil return means
-// at least one Send failed, so callers (e.g. the NATS adapter) can decide
-// whether to redeliver.
+// e.Source, and whose MinSeverity is at or below e.Severity or which is a
+// Resolution (see CONTEXT.md) — a Resolution always bypasses MinSeverity,
+// since it's inherently notify-worthy whenever its Source is routed at all.
+// Every matched Channel is attempted even if an earlier one fails; a non-nil
+// return means at least one Send failed, so callers (e.g. the NATS adapter)
+// can decide whether to redeliver.
 func (s *Service) Handle(e event.Event) error {
 	var errs []error
 	for _, route := range s.routes {
 		if route.Source != e.Source {
 			continue
 		}
-		if severityRank[e.Severity] < severityRank[route.MinSeverity] {
+		if !e.Resolution && severityRank[e.Severity] < severityRank[route.MinSeverity] {
 			continue
 		}
 		for _, name := range route.Channels {

@@ -4,9 +4,23 @@ package unraid
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/ReidMason/relay/internal/event"
 )
+
+// resolutionPhrases are matched case-insensitively against a normal-
+// importance webhook's Subject to detect that it's a Resolution (see
+// CONTEXT.md) rather than routine info noise (array started, parity check
+// finished, ...). This is a best-effort v1, not a settled rule — expected to
+// be tuned as real Unraid payloads are observed (see the raw webhook request
+// logging in transport/http).
+var resolutionPhrases = []string{
+	"returned to normal",
+	"back to normal",
+	"no longer",
+	"restored",
+}
 
 // Source is the event.Source this parser produces Events for.
 const Source event.Source = "unraid"
@@ -46,10 +60,30 @@ func (Parser) Parse(raw []byte) (event.Event, error) {
 		return event.Event{}, err
 	}
 
-	return event.New(Source, TypeArrayEvent, severity, Data{
+	data := Data{
 		Subject:     payload.Subject,
 		Description: payload.Description,
-	}), nil
+	}
+
+	if isResolution(payload.Importance, payload.Subject) {
+		return event.NewResolution(Source, TypeArrayEvent, severity, data), nil
+	}
+	return event.New(Source, TypeArrayEvent, severity, data), nil
+}
+
+// isResolution reports whether a normal-importance webhook's Subject reads
+// like a prior problem ending, per resolutionPhrases.
+func isResolution(importance, subject string) bool {
+	if importance != "normal" {
+		return false
+	}
+	lower := strings.ToLower(subject)
+	for _, phrase := range resolutionPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func severityFor(importance string) (event.Severity, error) {
