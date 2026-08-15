@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 	"unicode"
 
@@ -20,6 +21,12 @@ const (
 	colorInfo     = 0x95A5A6
 )
 
+var severityEmoji = map[event.Severity]string{
+	event.SeverityCritical: "🔴",
+	event.SeverityWarning:  "⚠️",
+	event.SeverityInfo:     "ℹ️",
+}
+
 // Adapter implements core.Channel by POSTing a Discord webhook embed.
 type Adapter struct {
 	webhookURL string
@@ -31,15 +38,17 @@ func New(webhookURL string) *Adapter {
 }
 
 type webhookBody struct {
-	Embeds []embed `json:"embeds"`
+	Username string  `json:"username,omitempty"`
+	Embeds   []embed `json:"embeds"`
 }
 
 type embed struct {
-	Title     string  `json:"title"`
-	Color     int     `json:"color"`
-	Timestamp string  `json:"timestamp,omitempty"`
-	Footer    *footer `json:"footer,omitempty"`
-	Fields    []field `json:"fields,omitempty"`
+	Title       string  `json:"title"`
+	Description string  `json:"description,omitempty"`
+	Color       int     `json:"color"`
+	Timestamp   string  `json:"timestamp,omitempty"`
+	Footer      *footer `json:"footer,omitempty"`
+	Fields      []field `json:"fields,omitempty"`
 }
 
 type footer struct {
@@ -53,14 +62,29 @@ type field struct {
 
 // Send posts e as a single Discord embed. e.Data is rendered generically —
 // no Source-specific field knowledge — via a mechanical PascalCase-to-Title
-// Case key split.
+// Case key split. Two Data key names get special placement, matching the
+// convention most sources already write human-readable text under: "Subject"
+// becomes the title and "Description" becomes the embed body, mirroring how
+// Unraid's own notifications render.
 func (a *Adapter) Send(e event.Event) error {
-	body := webhookBody{Embeds: []embed{{
-		Title:  fmt.Sprintf("%s: %s", e.Source, e.Type),
-		Color:  colorFor(e.Severity),
-		Footer: &footer{Text: string(e.Source)},
-		Fields: fieldsFor(e.Data),
-	}}}
+	title := fmt.Sprintf("%s: %s", e.Source, e.Type)
+	if s, ok := stringField(e.Data, "Subject"); ok {
+		title = s
+	}
+	title = fmt.Sprintf("%s %s", severityEmoji[e.Severity], title)
+
+	description, _ := stringField(e.Data, "Description")
+
+	body := webhookBody{
+		Username: capitalize(string(e.Source)),
+		Embeds: []embed{{
+			Title:       title,
+			Description: description,
+			Color:       colorFor(e.Severity),
+			Footer:      &footer{Text: string(e.Source)},
+			Fields:      fieldsFor(e.Data, e.Severity),
+		}},
+	}
 	if !e.Timestamp.IsZero() {
 		body.Embeds[0].Timestamp = e.Timestamp.Format(time.RFC3339)
 	}
@@ -93,18 +117,44 @@ func colorFor(s event.Severity) int {
 	}
 }
 
-func fieldsFor(data any) []field {
+// stringField returns data[key] if data is a map[string]any and the value at
+// key is a string.
+func stringField(data any, key string) (string, bool) {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	s, ok := m[key].(string)
+	return s, ok
+}
+
+func fieldsFor(data any, severity event.Severity) []field {
 	m, ok := data.(map[string]any)
 	if !ok {
 		return nil
 	}
 
-	fields := make([]field, 0, len(m))
+	fields := make([]field, 0, len(m)+1)
 	for k, v := range m {
+		if k == "Subject" || k == "Description" {
+			continue
+		}
 		fields = append(fields, field{Name: titleCase(k), Value: stringify(v)})
 	}
 	sort.Slice(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
+
+	if severity != "" {
+		fields = append(fields, field{Name: "Priority", Value: capitalize(string(severity))})
+	}
 	return fields
+}
+
+// capitalize upper-cases s's first rune, leaving the rest untouched.
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // titleCase splits a PascalCase key on uppercase boundaries and joins with

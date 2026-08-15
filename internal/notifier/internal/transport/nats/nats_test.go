@@ -261,22 +261,22 @@ func TestEndToEnd_AboveFloor_DeliversHumanReadableEmbedToDiscord(t *testing.T) {
 		t.Fatalf("expected 1 embed, got body: %+v", lastBody)
 	}
 	emb := embeds[0].(map[string]any)
-	if emb["title"] != "unraid: array.event" {
-		t.Errorf("title = %v, want unraid: array.event", emb["title"])
+	if emb["title"] != "⚠️ disk failure" {
+		t.Errorf("title = %v, want ⚠️ disk failure", emb["title"])
+	}
+	if emb["description"] != "disk1 SMART error" {
+		t.Errorf("description = %v, want disk1 SMART error", emb["description"])
 	}
 
 	fields, _ := emb["fields"].([]any)
-	if len(fields) != 2 {
-		t.Fatalf("expected 2 fields, got %+v", fields)
+	if len(fields) != 1 {
+		t.Fatalf("expected 1 field, got %+v", fields)
 	}
-	// Sorted alphabetically by formatted key: "Description" before "Subject".
+	// Subject/Description are pulled into title/description, leaving only
+	// the generic Priority field derived from Severity.
 	f0 := fields[0].(map[string]any)
-	f1 := fields[1].(map[string]any)
-	if f0["name"] != "Description" || f0["value"] != "disk1 SMART error" {
-		t.Errorf("field[0] = %+v, want Description/disk1 SMART error", f0)
-	}
-	if f1["name"] != "Subject" || f1["value"] != "disk failure" {
-		t.Errorf("field[1] = %+v, want Subject/disk failure", f1)
+	if f0["name"] != "Priority" || f0["value"] != "Warning" {
+		t.Errorf("field[0] = %+v, want Priority/Warning", f0)
 	}
 }
 

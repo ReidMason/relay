@@ -12,9 +12,10 @@ import (
 )
 
 type embed struct {
-	Title  string `json:"title"`
-	Color  int    `json:"color"`
-	Footer struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Color       int    `json:"color"`
+	Footer      struct {
 		Text string `json:"text"`
 	} `json:"footer"`
 	Timestamp string `json:"timestamp"`
@@ -25,7 +26,8 @@ type embed struct {
 }
 
 type webhookBody struct {
-	Embeds []embed `json:"embeds"`
+	Username string  `json:"username"`
+	Embeds   []embed `json:"embeds"`
 }
 
 func TestSend_PostsHumanReadableEmbed(t *testing.T) {
@@ -61,8 +63,14 @@ func TestSend_PostsHumanReadableEmbed(t *testing.T) {
 	}
 	got := captured.Embeds[0]
 
-	if got.Title != "unraid: array.event" {
-		t.Errorf("title = %q, want %q", got.Title, "unraid: array.event")
+	if captured.Username != "Unraid" {
+		t.Errorf("username = %q, want %q", captured.Username, "Unraid")
+	}
+	if got.Title != "🔴 Disk failure" {
+		t.Errorf("title = %q, want %q", got.Title, "🔴 Disk failure")
+	}
+	if got.Description != "disk1 SMART error" {
+		t.Errorf("description = %q, want %q", got.Description, "disk1 SMART error")
 	}
 	if got.Footer.Text != "unraid" {
 		t.Errorf("footer = %q, want %q", got.Footer.Text, "unraid")
@@ -71,15 +79,13 @@ func TestSend_PostsHumanReadableEmbed(t *testing.T) {
 		t.Errorf("color = %#x, want %#x (critical/red)", got.Color, 0xE74C3C)
 	}
 
-	if len(got.Fields) != 2 {
-		t.Fatalf("expected 2 fields, got %d: %+v", len(got.Fields), got.Fields)
+	if len(got.Fields) != 1 {
+		t.Fatalf("expected 1 field, got %d: %+v", len(got.Fields), got.Fields)
 	}
-	// Sorted alphabetically by formatted key: "Description" before "Subject".
-	if got.Fields[0].Name != "Description" || got.Fields[0].Value != "disk1 SMART error" {
-		t.Errorf("field[0] = %+v, want Description/disk1 SMART error", got.Fields[0])
-	}
-	if got.Fields[1].Name != "Subject" || got.Fields[1].Value != "Disk failure" {
-		t.Errorf("field[1] = %+v, want Subject/Disk failure", got.Fields[1])
+	// Subject/Description are pulled into title/description, leaving only
+	// the generic Priority field derived from Severity.
+	if got.Fields[0].Name != "Priority" || got.Fields[0].Value != "Critical" {
+		t.Errorf("field[0] = %+v, want Priority/Critical", got.Fields[0])
 	}
 }
 
