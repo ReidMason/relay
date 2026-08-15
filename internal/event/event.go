@@ -14,19 +14,38 @@ const (
 	SeverityCritical Severity = "critical"
 )
 
+// Source identifies the origin system that produced an Event, e.g. "sonarr",
+// "unraid". Each parser package declares its own Source constant.
+type Source string
+
+// Type names the intent an Event represents, e.g. "download.completed",
+// "disk.warning". Each parser package declares its own Type constants.
+type Type string
+
 // Event is the canonical, self-contained envelope published to NATS. A raw
 // webhook payload is not an Event until a parser has translated it —
 // vendor-specific codes/enums never survive into Data.
 type Event struct {
-	Source    string
-	Type      string
+	Source    Source
+	Type      Type
 	Severity  Severity
 	Timestamp time.Time
 	Data      any
 }
 
+// New builds an Event stamped with the current time.
+func New(source Source, eventType Type, severity Severity, data any) Event {
+	return Event{
+		Source:    source,
+		Type:      eventType,
+		Severity:  severity,
+		Timestamp: time.Now().UTC(),
+		Data:      data,
+	}
+}
+
 // Subject returns the NATS subject an Event of the given source and type is
 // published under: homelab.<source>.<type>.
-func Subject(source, eventType string) string {
-	return "homelab." + source + "." + eventType
+func Subject(source Source, eventType Type) string {
+	return "homelab." + string(source) + "." + string(eventType)
 }

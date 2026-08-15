@@ -4,13 +4,19 @@ package sonarr
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/ReidMason/relay/internal/event"
 	"github.com/ReidMason/relay/internal/ingest/internal/core"
 )
 
-const source = "sonarr"
+// Source is the event.Source this parser produces Events for.
+const Source event.Source = "sonarr"
+
+const (
+	TypeDownloadCompleted event.Type = "download.completed"
+	TypeGrab              event.Type = "grab"
+	TypeHealthIssue       event.Type = "health.issue"
+)
 
 type webhookPayload struct {
 	EventType string    `json:"eventType"`
@@ -62,11 +68,11 @@ func (Parser) Parse(raw []byte) (event.Event, error) {
 
 	switch payload.EventType {
 	case "Download":
-		return newEvent("download.completed", event.SeverityInfo, downloadData(payload)), nil
+		return event.New(Source, TypeDownloadCompleted, event.SeverityInfo, downloadData(payload)), nil
 	case "Grab":
-		return newEvent("grab", event.SeverityInfo, downloadData(payload)), nil
+		return event.New(Source, TypeGrab, event.SeverityInfo, downloadData(payload)), nil
 	case "HealthIssue":
-		return newEvent("health.issue", event.SeverityWarning, HealthIssueData{
+		return event.New(Source, TypeHealthIssue, event.SeverityWarning, HealthIssueData{
 			Message: payload.Message,
 			Type:    payload.Type,
 			WikiURL: payload.WikiURL,
@@ -87,14 +93,4 @@ func downloadData(payload webhookPayload) DownloadData {
 		data.EpisodeNumber = ep.EpisodeNumber
 	}
 	return data
-}
-
-func newEvent(eventType string, severity event.Severity, data any) event.Event {
-	return event.Event{
-		Source:    source,
-		Type:      eventType,
-		Severity:  severity,
-		Timestamp: time.Now().UTC(),
-		Data:      data,
-	}
 }

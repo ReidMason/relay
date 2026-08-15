@@ -43,9 +43,9 @@ func (f *fakePublisher) events() []event.Event {
 }
 
 func newTestServer(publisher core.Publisher) *httptest.Server {
-	parsers := map[string]core.Parser{
-		"sonarr": sonarr.New(),
-		"unraid": unraid.New(),
+	parsers := map[event.Source]core.Parser{
+		sonarr.Source: sonarr.New(),
+		unraid.Source: unraid.New(),
 	}
 	service := core.NewService(parsers, publisher)
 	handler := transporthttp.NewHandler(service, slog.New(slog.NewTextHandler(io.Discard, nil)))

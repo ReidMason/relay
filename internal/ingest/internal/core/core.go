@@ -28,7 +28,7 @@ type Publisher interface {
 // Service looks up the Parser registered for a source, parses the raw
 // payload, and publishes the resulting Event.
 type Service struct {
-	parsers   map[string]Parser
+	parsers   map[event.Source]Parser
 	publisher Publisher
 }
 
@@ -39,16 +39,17 @@ var ErrUnknownSource = errors.New("unknown source")
 // (-> 500) from a Parser failure (-> 400) via errors.Is.
 var ErrPublish = errors.New("publish failed")
 
-func NewService(parsers map[string]Parser, publisher Publisher) *Service {
+func NewService(parsers map[event.Source]Parser, publisher Publisher) *Service {
 	return &Service{parsers: parsers, publisher: publisher}
 }
 
 // Handle looks up the Parser for source, parses raw into an Event, and
 // publishes it. Returns ErrUnknownSource if source isn't registered, or
 // ErrSkip (wrapped as-is, checkable via errors.Is) if the parser found a
-// valid webhook with nothing to publish.
+// valid webhook with nothing to publish. source is taken as a raw string
+// since it originates as an untrusted URL path segment.
 func (s *Service) Handle(source string, raw []byte) error {
-	parser, ok := s.parsers[source]
+	parser, ok := s.parsers[event.Source(source)]
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownSource, source)
 	}

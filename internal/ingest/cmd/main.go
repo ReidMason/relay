@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/ReidMason/relay/internal/event"
 	"github.com/ReidMason/relay/internal/ingest/internal/core"
 	"github.com/ReidMason/relay/internal/ingest/internal/sonarr"
 	transporthttp "github.com/ReidMason/relay/internal/ingest/internal/transport/http"
@@ -27,9 +28,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	parsers := map[string]core.Parser{
-		"sonarr": sonarr.New(),
-		"unraid": unraid.New(),
+	parsers := map[event.Source]core.Parser{
+		sonarr.Source: sonarr.New(),
+		unraid.Source: unraid.New(),
 	}
 
 	service := core.NewService(parsers, publisher)

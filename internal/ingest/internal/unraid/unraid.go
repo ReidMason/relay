@@ -4,14 +4,15 @@ package unraid
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/ReidMason/relay/internal/event"
 )
 
-const source = "unraid"
+// Source is the event.Source this parser produces Events for.
+const Source event.Source = "unraid"
 
-const eventType = "array.event"
+// TypeArrayEvent is the event.Type for all Unraid array/disk notifications.
+const TypeArrayEvent event.Type = "array.event"
 
 type webhookPayload struct {
 	Importance  string `json:"importance"`
@@ -45,16 +46,10 @@ func (Parser) Parse(raw []byte) (event.Event, error) {
 		return event.Event{}, err
 	}
 
-	return event.Event{
-		Source:    source,
-		Type:      eventType,
-		Severity:  severity,
-		Timestamp: time.Now().UTC(),
-		Data: Data{
-			Subject:     payload.Subject,
-			Description: payload.Description,
-		},
-	}, nil
+	return event.New(Source, TypeArrayEvent, severity, Data{
+		Subject:     payload.Subject,
+		Description: payload.Description,
+	}), nil
 }
 
 func severityFor(importance string) (event.Severity, error) {
