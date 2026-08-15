@@ -1,0 +1,3 @@
+module github.com/ReidMason/relay
+
+go 1.26.4
