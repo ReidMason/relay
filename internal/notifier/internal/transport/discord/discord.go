@@ -56,7 +56,7 @@ type field struct {
 // Case key split.
 func (a *Adapter) Send(e event.Event) error {
 	body := webhookBody{Embeds: []embed{{
-		Title:  string(e.Type),
+		Title:  fmt.Sprintf("%s: %s", e.Source, e.Type),
 		Color:  colorFor(e.Severity),
 		Footer: &footer{Text: string(e.Source)},
 		Fields: fieldsFor(e.Data),

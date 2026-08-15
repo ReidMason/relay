@@ -261,8 +261,8 @@ func TestEndToEnd_AboveFloor_DeliversHumanReadableEmbedToDiscord(t *testing.T) {
 		t.Fatalf("expected 1 embed, got body: %+v", lastBody)
 	}
 	emb := embeds[0].(map[string]any)
-	if emb["title"] != "array.event" {
-		t.Errorf("title = %v, want array.event", emb["title"])
+	if emb["title"] != "unraid: array.event" {
+		t.Errorf("title = %v, want unraid: array.event", emb["title"])
 	}
 
 	fields, _ := emb["fields"].([]any)

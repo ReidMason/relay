@@ -61,8 +61,8 @@ func TestSend_PostsHumanReadableEmbed(t *testing.T) {
 	}
 	got := captured.Embeds[0]
 
-	if got.Title != "array.event" {
-		t.Errorf("title = %q, want %q", got.Title, "array.event")
+	if got.Title != "unraid: array.event" {
+		t.Errorf("title = %q, want %q", got.Title, "unraid: array.event")
 	}
 	if got.Footer.Text != "unraid" {
 		t.Errorf("footer = %q, want %q", got.Footer.Text, "unraid")
