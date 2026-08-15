@@ -5,6 +5,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ReidMason/relay/internal/event"
@@ -48,10 +49,12 @@ func NewService(routes []Route, channels map[ChannelName]Channel) *Service {
 }
 
 // Handle sends e to every Channel named by a Route whose Source matches
-// e.Source and whose MinSeverity is at or below e.Severity. Returns an error
-// if any Channel.Send fails, so callers (e.g. the NATS adapter) can decide
+// e.Source and whose MinSeverity is at or below e.Severity. Every matched
+// Channel is attempted even if an earlier one fails; a non-nil return means
+// at least one Send failed, so callers (e.g. the NATS adapter) can decide
 // whether to redeliver.
 func (s *Service) Handle(e event.Event) error {
+	var errs []error
 	for _, route := range s.routes {
 		if route.Source != e.Source {
 			continue
@@ -65,9 +68,9 @@ func (s *Service) Handle(e event.Event) error {
 				continue
 			}
 			if err := channel.Send(e); err != nil {
-				return fmt.Errorf("core: send via %s: %w", name, err)
+				errs = append(errs, fmt.Errorf("core: send via %s: %w", name, err))
 			}
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }

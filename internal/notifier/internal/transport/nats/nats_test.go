@@ -229,7 +229,15 @@ func TestEndToEnd_AboveFloor_DeliversHumanReadableEmbedToDiscord(t *testing.T) {
 	defer cancel()
 	go adapter.Run(ctx)
 
-	e := event.New("unraid", "array.event", event.SeverityCritical, map[string]any{"Subject": "disk failure"})
+	// Unraid's floor is `warning` — publish exactly at the boundary (not
+	// `critical`) to prove the boundary itself is inclusive end-to-end, with
+	// a multi-key Data payload to verify field formatting/ordering survive
+	// the full NATS -> core -> Discord path, not just the discord package in
+	// isolation.
+	e := event.New("unraid", "array.event", event.SeverityWarning, map[string]any{
+		"Subject":     "disk failure",
+		"Description": "disk1 SMART error",
+	})
 	publishRaw(t, url, "homelab.unraid.array.event", e)
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -255,6 +263,74 @@ func TestEndToEnd_AboveFloor_DeliversHumanReadableEmbedToDiscord(t *testing.T) {
 	emb := embeds[0].(map[string]any)
 	if emb["title"] != "array.event" {
 		t.Errorf("title = %v, want array.event", emb["title"])
+	}
+
+	fields, _ := emb["fields"].([]any)
+	if len(fields) != 2 {
+		t.Fatalf("expected 2 fields, got %+v", fields)
+	}
+	// Sorted alphabetically by formatted key: "Description" before "Subject".
+	f0 := fields[0].(map[string]any)
+	f1 := fields[1].(map[string]any)
+	if f0["name"] != "Description" || f0["value"] != "disk1 SMART error" {
+		t.Errorf("field[0] = %+v, want Description/disk1 SMART error", f0)
+	}
+	if f1["name"] != "Subject" || f1["value"] != "disk failure" {
+		t.Errorf("field[1] = %+v, want Subject/disk failure", f1)
+	}
+}
+
+func TestEndToEnd_SonarrRouting_OnlyCriticalDelivered(t *testing.T) {
+	var mu sync.Mutex
+	requests := 0
+	discordServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests++
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer discordServer.Close()
+
+	channels := map[core.ChannelName]core.Channel{core.ChannelDiscord: discord.New(discordServer.URL)}
+	service := core.NewService(endToEndRoutes(), channels)
+
+	url := startEmbeddedNATS(t)
+	adapter, err := transportnats.Connect(context.Background(), url, service, nil)
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go adapter.Run(ctx)
+
+	for _, sev := range []event.Severity{event.SeverityInfo, event.SeverityWarning} {
+		e := event.New("sonarr", "grab", sev, nil)
+		publishRaw(t, url, "homelab.sonarr.grab", e)
+	}
+	// Sonarr's floor is `critical` — info/warning should never reach Discord.
+	time.Sleep(500 * time.Millisecond)
+	mu.Lock()
+	got := requests
+	mu.Unlock()
+	if got != 0 {
+		t.Fatalf("expected 0 discord requests for below-floor sonarr events, got %d", got)
+	}
+
+	e := event.New("sonarr", "grab", event.SeverityCritical, nil)
+	publishRaw(t, url, "homelab.sonarr.grab", e)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		got := requests
+		mu.Unlock()
+		if got >= 1 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for critical sonarr event to reach discord, got %d requests", got)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

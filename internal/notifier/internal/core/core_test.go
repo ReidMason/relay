@@ -107,3 +107,28 @@ func TestHandle_ChannelSendFailure_PropagatesError(t *testing.T) {
 		t.Fatalf("expected error to wrap %v, got %v", sendErr, err)
 	}
 }
+
+func TestHandle_OneChannelFails_OthersStillSent(t *testing.T) {
+	const channelBackup core.ChannelName = "backup"
+
+	sendErr := errors.New("discord unavailable")
+	failing := &fakeChannel{err: sendErr}
+	other := &fakeChannel{}
+
+	routes := []core.Route{
+		{Source: sourceUnraid, MinSeverity: event.SeverityWarning, Channels: []core.ChannelName{core.ChannelDiscord, channelBackup}},
+	}
+	svc := core.NewService(routes, map[core.ChannelName]core.Channel{
+		core.ChannelDiscord: failing,
+		channelBackup:       other,
+	})
+
+	e := event.New(sourceUnraid, "array.event", event.SeverityCritical, nil)
+	if err := svc.Handle(e); !errors.Is(err, sendErr) {
+		t.Fatalf("expected error to wrap %v, got %v", sendErr, err)
+	}
+
+	if len(other.sent) != 1 {
+		t.Fatalf("expected the non-failing channel to still receive the event, got %d sends", len(other.sent))
+	}
+}
