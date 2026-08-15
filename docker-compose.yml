@@ -1,0 +1,31 @@
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+
+  ingest:
+    build:
+      context: .
+      dockerfile: internal/ingest/Dockerfile
+    environment:
+      NATS_URL: nats://nats:4222
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - nats
+
+  notifier:
+    build:
+      context: .
+      dockerfile: internal/notifier/Dockerfile
+    environment:
+      NATS_URL: nats://nats:4222
+      PORT: "8081"
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
+    ports:
+      - "8081:8081"
+    depends_on:
+      - nats
