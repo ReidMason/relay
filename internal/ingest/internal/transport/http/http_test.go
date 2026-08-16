@@ -75,7 +75,7 @@ const sonarrGrabPayload = `{
 }`
 
 const sonarrHealthIssuePayload = `{
-  "eventType": "HealthIssue",
+  "eventType": "Health",
   "level": "warning",
   "message": "Indexer RSS sync failed",
   "type": "IndexerRssCheck",
@@ -83,6 +83,59 @@ const sonarrHealthIssuePayload = `{
 }`
 
 const sonarrTestPayload = `{"eventType": "Test"}`
+
+const sonarrUpgradePayload = `{
+  "eventType": "Download",
+  "isUpgrade": true,
+  "series": {"title": "The Expanse"},
+  "episodes": [{"title": "Dulcinea", "seasonNumber": 1, "episodeNumber": 1}]
+}`
+
+const sonarrRenamePayload = `{
+  "eventType": "Rename",
+  "series": {"title": "The Expanse"}
+}`
+
+const sonarrSeriesAddPayload = `{
+  "eventType": "SeriesAdd",
+  "series": {"title": "The Expanse"}
+}`
+
+const sonarrSeriesDeletePayload = `{
+  "eventType": "SeriesDelete",
+  "series": {"title": "The Expanse"},
+  "deleteFiles": true
+}`
+
+const sonarrEpisodeFileDeletePayload = `{
+  "eventType": "EpisodeFileDelete",
+  "series": {"title": "House of the Dragon"},
+  "episodes": [{"title": "The Rogue Prince", "seasonNumber": 1, "episodeNumber": 2}],
+  "deleteReason": "manual"
+}`
+
+const sonarrApplicationUpdatePayload = `{
+  "eventType": "ApplicationUpdate",
+  "message": "Sonarr updated",
+  "previousVersion": "4.0.0.0",
+  "newVersion": "4.0.1.0"
+}`
+
+const sonarrManualInteractionRequiredPayload = `{
+  "eventType": "ManualInteractionRequired",
+  "series": {"title": "The Expanse"},
+  "episodes": [{"title": "Dulcinea", "seasonNumber": 1, "episodeNumber": 1}],
+  "downloadStatus": "warning",
+  "message": "Not a Custom Format upgrade for existing episode file"
+}`
+
+const sonarrHealthRestoredPayload = `{
+  "eventType": "HealthRestored",
+  "level": "warning",
+  "message": "Indexer RSS sync failed",
+  "type": "IndexerRssCheck",
+  "wikiUrl": "https://wiki.example/health"
+}`
 
 const unraidAlertPayload = `{
   "embeds": [
@@ -225,6 +278,269 @@ func TestSonarrTestEventSkipped(t *testing.T) {
 	}
 }
 
+func TestSonarrUpgrade(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "sonarr", sonarrUpgradePayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Type != "download.upgraded" || e.Severity != event.SeverityInfo {
+		t.Fatalf("unexpected event: %+v", e)
+	}
+	data, ok := e.Data.(sonarr.DownloadData)
+	if !ok {
+		t.Fatalf("Data type = %T, want sonarr.DownloadData", e.Data)
+	}
+	want := sonarr.DownloadData{SeriesTitle: "The Expanse", EpisodeTitle: "Dulcinea", SeasonNumber: 1, EpisodeNumber: 1}
+	if data != want {
+		t.Fatalf("Data = %+v, want %+v", data, want)
+	}
+}
+
+func TestSonarrRename(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "sonarr", sonarrRenamePayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Type != "episode.renamed" || e.Severity != event.SeverityInfo {
+		t.Fatalf("unexpected event: %+v", e)
+	}
+	data, ok := e.Data.(sonarr.RenameData)
+	if !ok {
+		t.Fatalf("Data type = %T, want sonarr.RenameData", e.Data)
+	}
+	if data.SeriesTitle != "The Expanse" {
+		t.Fatalf("Data = %+v, want SeriesTitle 'The Expanse'", data)
+	}
+}
+
+func TestSonarrSeriesAdd(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "sonarr", sonarrSeriesAddPayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Type != "series.added" || e.Severity != event.SeverityInfo {
+		t.Fatalf("unexpected event: %+v", e)
+	}
+	data, ok := e.Data.(sonarr.SeriesData)
+	if !ok {
+		t.Fatalf("Data type = %T, want sonarr.SeriesData", e.Data)
+	}
+	want := sonarr.SeriesData{SeriesTitle: "The Expanse"}
+	if data != want {
+		t.Fatalf("Data = %+v, want %+v", data, want)
+	}
+}
+
+func TestSonarrSeriesDelete(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "sonarr", sonarrSeriesDeletePayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Type != "series.deleted" || e.Severity != event.SeverityInfo {
+		t.Fatalf("unexpected event: %+v", e)
+	}
+	data, ok := e.Data.(sonarr.SeriesData)
+	if !ok {
+		t.Fatalf("Data type = %T, want sonarr.SeriesData", e.Data)
+	}
+	want := sonarr.SeriesData{SeriesTitle: "The Expanse", DeleteFiles: true}
+	if data != want {
+		t.Fatalf("Data = %+v, want %+v", data, want)
+	}
+}
+
+func TestSonarrEpisodeFileDelete(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "sonarr", sonarrEpisodeFileDeletePayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Type != "episode_file.deleted" || e.Severity != event.SeverityInfo {
+		t.Fatalf("unexpected event: %+v", e)
+	}
+	data, ok := e.Data.(sonarr.EpisodeFileDeleteData)
+	if !ok {
+		t.Fatalf("Data type = %T, want sonarr.EpisodeFileDeleteData", e.Data)
+	}
+	want := sonarr.EpisodeFileDeleteData{
+		SeriesTitle:   "House of the Dragon",
+		EpisodeTitle:  "The Rogue Prince",
+		SeasonNumber:  1,
+		EpisodeNumber: 2,
+		Reason:        "manual",
+	}
+	if data != want {
+		t.Fatalf("Data = %+v, want %+v", data, want)
+	}
+}
+
+func TestSonarrEpisodeFileDeleteReasonCaseInsensitive(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	payload := `{
+	  "eventType": "EpisodeFileDelete",
+	  "series": {"title": "The Expanse"},
+	  "episodes": [{"title": "Dulcinea", "seasonNumber": 1, "episodeNumber": 1}],
+	  "deleteReason": "Upgrade"
+	}`
+	resp := postWebhook(t, srv, "sonarr", payload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	data, ok := events[0].Data.(sonarr.EpisodeFileDeleteData)
+	if !ok || data.Reason != "upgrade" {
+		t.Fatalf("Data = %+v, want Reason 'upgrade'", events[0].Data)
+	}
+}
+
+func TestSonarrApplicationUpdate(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "sonarr", sonarrApplicationUpdatePayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Type != "application.updated" || e.Severity != event.SeverityInfo {
+		t.Fatalf("unexpected event: %+v", e)
+	}
+	data, ok := e.Data.(sonarr.ApplicationUpdateData)
+	if !ok {
+		t.Fatalf("Data type = %T, want sonarr.ApplicationUpdateData", e.Data)
+	}
+	want := sonarr.ApplicationUpdateData{Message: "Sonarr updated", PreviousVersion: "4.0.0.0", NewVersion: "4.0.1.0"}
+	if data != want {
+		t.Fatalf("Data = %+v, want %+v", data, want)
+	}
+}
+
+func TestSonarrManualInteractionRequired(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "sonarr", sonarrManualInteractionRequiredPayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Type != "manual_interaction.required" || e.Severity != event.SeverityInfo {
+		t.Fatalf("unexpected event: %+v", e)
+	}
+	data, ok := e.Data.(sonarr.ManualInteractionData)
+	if !ok {
+		t.Fatalf("Data type = %T, want sonarr.ManualInteractionData", e.Data)
+	}
+	want := sonarr.ManualInteractionData{
+		SeriesTitle:    "The Expanse",
+		EpisodeTitle:   "Dulcinea",
+		DownloadStatus: "warning",
+		Message:        "Not a Custom Format upgrade for existing episode file",
+	}
+	if data != want {
+		t.Fatalf("Data = %+v, want %+v", data, want)
+	}
+}
+
+func TestSonarrHealthRestored(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "sonarr", sonarrHealthRestoredPayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Type != "health.issue" || e.Severity != event.SeverityWarning {
+		t.Fatalf("unexpected event: %+v", e)
+	}
+	if !e.Resolution {
+		t.Fatalf("expected HealthRestored to be a Resolution, got %+v", e)
+	}
+	data, ok := e.Data.(sonarr.HealthIssueData)
+	if !ok {
+		t.Fatalf("Data type = %T, want sonarr.HealthIssueData", e.Data)
+	}
+	want := sonarr.HealthIssueData{Message: "Indexer RSS sync failed", Type: "IndexerRssCheck", WikiURL: "https://wiki.example/health"}
+	if data != want {
+		t.Fatalf("Data = %+v, want %+v", data, want)
+	}
+}
+
 func TestMalformedJSON(t *testing.T) {
 	pub := &fakePublisher{}
 	srv := newTestServer(pub)
@@ -244,7 +560,7 @@ func TestUnrecognizedEventType(t *testing.T) {
 	srv := newTestServer(pub)
 	defer srv.Close()
 
-	resp := postWebhook(t, srv, "sonarr", `{"eventType": "SeriesAdd"}`)
+	resp := postWebhook(t, srv, "sonarr", `{"eventType": "Bogus"}`)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
