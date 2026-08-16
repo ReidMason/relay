@@ -264,7 +264,7 @@ func TestSonarrHealthIssue(t *testing.T) {
 	}
 }
 
-func TestSonarrTestEventSkipped(t *testing.T) {
+func TestSonarrTestEventPublished(t *testing.T) {
 	pub := &fakePublisher{}
 	srv := newTestServer(pub)
 	defer srv.Close()
@@ -273,8 +273,14 @@ func TestSonarrTestEventSkipped(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
-	if len(pub.events()) != 0 {
-		t.Fatalf("published %d events, want 0", len(pub.events()))
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Type != "test" || !e.IsTest {
+		t.Fatalf("unexpected event: %+v", e)
 	}
 }
 
@@ -351,11 +357,11 @@ func TestSonarrSeriesAdd(t *testing.T) {
 	if e.Type != "series.added" || e.Severity != event.SeverityInfo {
 		t.Fatalf("unexpected event: %+v", e)
 	}
-	data, ok := e.Data.(sonarr.SeriesData)
+	data, ok := e.Data.(sonarr.SeriesAddData)
 	if !ok {
-		t.Fatalf("Data type = %T, want sonarr.SeriesData", e.Data)
+		t.Fatalf("Data type = %T, want sonarr.SeriesAddData", e.Data)
 	}
-	want := sonarr.SeriesData{SeriesTitle: "The Expanse"}
+	want := sonarr.SeriesAddData{SeriesTitle: "The Expanse"}
 	if data != want {
 		t.Fatalf("Data = %+v, want %+v", data, want)
 	}
@@ -379,11 +385,11 @@ func TestSonarrSeriesDelete(t *testing.T) {
 	if e.Type != "series.deleted" || e.Severity != event.SeverityInfo {
 		t.Fatalf("unexpected event: %+v", e)
 	}
-	data, ok := e.Data.(sonarr.SeriesData)
+	data, ok := e.Data.(sonarr.SeriesDeleteData)
 	if !ok {
-		t.Fatalf("Data type = %T, want sonarr.SeriesData", e.Data)
+		t.Fatalf("Data type = %T, want sonarr.SeriesDeleteData", e.Data)
 	}
-	want := sonarr.SeriesData{SeriesTitle: "The Expanse", DeleteFiles: true}
+	want := sonarr.SeriesDeleteData{SeriesTitle: "The Expanse", DeleteFiles: true}
 	if data != want {
 		t.Fatalf("Data = %+v, want %+v", data, want)
 	}
@@ -658,6 +664,42 @@ func TestUnraidResolution(t *testing.T) {
 	}
 	if !e.Resolution {
 		t.Fatalf("expected 'returned to normal temperature' subject to be detected as a Resolution, got %+v", e)
+	}
+}
+
+const unraidTestPayload = `{
+  "embeds": [
+    {
+      "title": "Discord test.",
+      "description": "Discord test.",
+      "fields": [
+        {"name": "Description", "value": "Discord test."},
+        {"name": "Priority", "value": "normal", "inline": true}
+      ]
+    }
+  ]
+}`
+
+func TestUnraidTestEventPublished(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "unraid", unraidTestPayload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if !e.IsTest {
+		t.Fatalf("expected 'Discord test.' title to be detected as a test, got %+v", e)
+	}
+	if e.Resolution {
+		t.Fatalf("test event should not also be a Resolution, got %+v", e)
 	}
 }
 

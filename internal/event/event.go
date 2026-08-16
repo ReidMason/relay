@@ -30,6 +30,7 @@ type Event struct {
 	Type       Type
 	Severity   Severity
 	Resolution bool
+	IsTest     bool
 	Timestamp  time.Time
 	Data       any
 }
@@ -51,6 +52,18 @@ func New(source Source, eventType Type, severity Severity, data any) Event {
 func NewResolution(source Source, eventType Type, severity Severity, data any) Event {
 	e := New(source, eventType, severity, data)
 	e.Resolution = true
+	return e
+}
+
+// NewTest builds an Event stamped with the current time, marked as a
+// connectivity test (see CONTEXT.md) — a vendor's "send a test webhook"
+// button, rather than something that actually happened. notifier delivers
+// it regardless of a route's MinSeverity, the same way it always delivers a
+// Resolution, since the point of a test is to prove the pipe works
+// end-to-end independent of severity routing config.
+func NewTest(source Source, eventType Type, severity Severity, data any) Event {
+	e := New(source, eventType, severity, data)
+	e.IsTest = true
 	return e
 }
 

@@ -28,6 +28,11 @@ var resolutionPhrases = []string{
 	"restored",
 }
 
+// testTitle is the fixed title/description Unraid's own Settings >
+// Notifications > "Test" button sends (confirmed from a real webhook log),
+// used to detect a connectivity test rather than a real array/disk event.
+const testTitle = "discord test."
+
 // Source is the event.Source this parser produces Events for.
 const Source event.Source = "unraid"
 
@@ -90,10 +95,20 @@ func (Parser) Parse(raw []byte) (event.Event, error) {
 		Description: e.Description,
 	}
 
+	if isTest(e.Title) {
+		return event.NewTest(Source, TypeArrayEvent, severity, data), nil
+	}
 	if isResolution(severity, e.Title) {
 		return event.NewResolution(Source, TypeArrayEvent, severity, data), nil
 	}
 	return event.New(Source, TypeArrayEvent, severity, data), nil
+}
+
+// isTest reports whether an embed's title matches Unraid's fixed test-button
+// text exactly (case-insensitive) — unlike isResolution's phrase-contains
+// matching, this is a known fixed string, not a heuristic.
+func isTest(title string) bool {
+	return strings.EqualFold(title, testTitle)
 }
 
 // unraidPriorityField returns the value of the embed field Unraid names

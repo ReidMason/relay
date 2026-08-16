@@ -77,8 +77,11 @@ event family):
   unchanged — the Type already encodes upgrade-vs-not, so `Data` doesn't
   duplicate it)
 - `episode.renamed` → `RenameData{SeriesTitle string, RenamedCount int}`
-- `series.added` → `SeriesData{SeriesTitle string}`
-- `series.deleted` → `SeriesData{SeriesTitle string, DeleteFiles bool}`
+- `series.added` → `SeriesAddData{SeriesTitle string}`
+- `series.deleted` → `SeriesDeleteData{SeriesTitle string, DeleteFiles bool}`
+  (kept as two distinct structs rather than one shared shape, so a
+  `series.added` Event's `Data` can never carry a meaningless
+  `DeleteFiles: false` that looks like a real "don't delete files" signal)
 - `episode_file.deleted` → `EpisodeFileDeleteData{SeriesTitle,
   EpisodeTitle string, SeasonNumber, EpisodeNumber int, Reason string}`
   (`Reason` = Sonarr's `DeleteReason`, normalized)
@@ -124,3 +127,18 @@ explicit human decision (a new row in this table), not a silent pass-through.
       sample still parses correctly).
 
 ## Comments
+
+- Addendum (same session, post-implementation): Sonarr's `Test` eventType no
+  longer skips (`core.ErrSkip`) — it now publishes an `event.NewTest` Event
+  (`Type: test`), and notifier's `MinSeverity` floor bypasses `IsTest`
+  Events the same way it already bypasses `Resolution` ones. This was
+  needed because notifier's Sonarr route is configured at
+  `MinSeverity: Critical` (`internal/notifier/cmd/main.go`), so even a
+  published Test Event would otherwise never reach Discord — silently
+  defeating the button's purpose of proving the webhook is wired up
+  correctly. Unraid's equivalent Test button (Settings > Notifications)
+  sends a fixed `"Discord test."` title/description at `normal` priority;
+  the Unraid parser now detects that exact string and marks it `IsTest`
+  too, for the same reason (Unraid's route floor is `warning`, above
+  `normal`'s `info` severity). See `internal/event/event.go`'s `IsTest`
+  field and `CONTEXT.md`'s "Test" entry.

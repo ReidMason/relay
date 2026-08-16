@@ -11,8 +11,12 @@ import (
 	"github.com/ReidMason/relay/internal/event"
 )
 
-// ErrSkip signals a valid webhook that intentionally produces no Event
-// (e.g. Sonarr's Test connectivity check). Callers check it via errors.Is.
+// ErrSkip signals a valid webhook that intentionally produces no Event.
+// Callers check it via errors.Is. Not currently used by any registered
+// Parser — Sonarr's Test webhook used to skip, but now publishes an
+// event.NewTest Event instead, since notifier needs an actual Event to
+// deliver as proof the pipe works. Kept as a general Parser capability for
+// any future case that's genuinely a no-op (unlike a connectivity test).
 var ErrSkip = errors.New("skip: no event to publish")
 
 // Parser translates a vendor-shaped webhook payload into a canonical Event.

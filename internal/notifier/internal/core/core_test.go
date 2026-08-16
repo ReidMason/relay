@@ -98,6 +98,21 @@ func TestHandle_BelowFloor_ResolutionStillSent(t *testing.T) {
 	}
 }
 
+func TestHandle_BelowFloor_TestStillSent(t *testing.T) {
+	discord := &fakeChannel{}
+	svc := core.NewService(routesFixture(), map[core.ChannelName]core.Channel{core.ChannelDiscord: discord})
+
+	// Sonarr's route floor is Critical; a test Event is only ever Info.
+	e := event.NewTest(sourceSonarr, "test", event.SeverityInfo, nil)
+	if err := svc.Handle(e); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if len(discord.sent) != 1 {
+		t.Fatalf("expected test event to bypass MinSeverity floor, got %d sent", len(discord.sent))
+	}
+}
+
 func TestHandle_UnmatchedSource_NotSent(t *testing.T) {
 	discord := &fakeChannel{}
 	svc := core.NewService(routesFixture(), map[core.ChannelName]core.Channel{core.ChannelDiscord: discord})

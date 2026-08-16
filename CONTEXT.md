@@ -59,6 +59,20 @@ using whatever real signal that vendor gives; notifier never infers it from
 Source/Type.
 _Avoid_: Recovery, Clear, Resolved-flag
 
+**Test** (`Event.IsTest`):
+A boolean dimension on Event, orthogonal to Severity and Resolution, marking
+that the Event represents a vendor's "send a test webhook" button (e.g.
+Sonarr's Connect "Test" button, Unraid's Settings > Notifications "Test")
+rather than something that actually happened. notifier delivers a Test Event
+regardless of a route's MinSeverity, the same way it always delivers a
+Resolution — the whole point of a test is proving the pipe works
+end-to-end, independent of severity routing config. A parser decides IsTest
+using whatever real signal that vendor gives (an explicit `eventType`, a
+fixed placeholder title, ...); notifier never infers it from Source/Type.
+_Avoid_: Ping, Healthcheck (this repo already uses Liveness/Readiness for
+service health — a Test Event is a vendor's webhook-connectivity check, an
+unrelated concept)
+
 **Liveness** (`/livez`):
 Unconditional signal that a service's process is up and serving HTTP — no
 dependency checks, always 200. Answers "should this be restarted," never

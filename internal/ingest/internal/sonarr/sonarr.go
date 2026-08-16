@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/ReidMason/relay/internal/event"
-	"github.com/ReidMason/relay/internal/ingest/internal/core"
 )
 
 // Source is the event.Source this parser produces Events for.
@@ -24,7 +23,14 @@ const (
 	TypeEpisodeFileDelete         event.Type = "episode_file.deleted"
 	TypeApplicationUpdate         event.Type = "application.updated"
 	TypeManualInteractionRequired event.Type = "manual_interaction.required"
+	TypeTest                      event.Type = "test"
 )
+
+// TestData is the Data payload for test Events, mirroring Sonarr's own
+// "Test" webhook button, which sends a fixed placeholder series/episode.
+type TestData struct {
+	SeriesTitle string
+}
 
 type webhookPayload struct {
 	EventType       string    `json:"eventType"`
@@ -73,9 +79,13 @@ type RenameData struct {
 	SeriesTitle string
 }
 
-// SeriesData is the flattened Data payload for series.added and
-// series.deleted Events.
-type SeriesData struct {
+// SeriesAddData is the flattened Data payload for series.added Events.
+type SeriesAddData struct {
+	SeriesTitle string
+}
+
+// SeriesDeleteData is the flattened Data payload for series.deleted Events.
+type SeriesDeleteData struct {
 	SeriesTitle string
 	DeleteFiles bool
 }
@@ -131,9 +141,9 @@ func (Parser) Parse(raw []byte) (event.Event, error) {
 	case "Rename":
 		return event.New(Source, TypeRename, event.SeverityInfo, RenameData{SeriesTitle: payload.Series.Title}), nil
 	case "SeriesAdd":
-		return event.New(Source, TypeSeriesAdd, event.SeverityInfo, SeriesData{SeriesTitle: payload.Series.Title}), nil
+		return event.New(Source, TypeSeriesAdd, event.SeverityInfo, SeriesAddData{SeriesTitle: payload.Series.Title}), nil
 	case "SeriesDelete":
-		return event.New(Source, TypeSeriesDelete, event.SeverityInfo, SeriesData{
+		return event.New(Source, TypeSeriesDelete, event.SeverityInfo, SeriesDeleteData{
 			SeriesTitle: payload.Series.Title,
 			DeleteFiles: payload.DeleteFiles,
 		}), nil
@@ -163,7 +173,7 @@ func (Parser) Parse(raw []byte) (event.Event, error) {
 	case "HealthRestored":
 		return event.NewResolution(Source, TypeHealthIssue, event.SeverityWarning, healthIssueData(payload)), nil
 	case "Test":
-		return event.Event{}, core.ErrSkip
+		return event.NewTest(Source, TypeTest, event.SeverityInfo, TestData{SeriesTitle: payload.Series.Title}), nil
 	default:
 		return event.Event{}, fmt.Errorf("sonarr: unrecognized eventType %q", payload.EventType)
 	}
