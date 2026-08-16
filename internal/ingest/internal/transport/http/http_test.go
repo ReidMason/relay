@@ -54,7 +54,7 @@ func newTestServer(publisher core.Publisher) *httptest.Server {
 
 func postWebhook(t *testing.T, srv *httptest.Server, source, body string) *http.Response {
 	t.Helper()
-	resp, err := http.Post(srv.URL+"/webhooks/"+source, "application/json", strings.NewReader(body))
+	resp, err := http.Post(srv.URL+"/api/v1/webhooks/"+source, "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("post webhook: %v", err)
 	}

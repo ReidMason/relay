@@ -1,5 +1,5 @@
 // Package http is the HTTP transport adapter for ingest: it wires
-// POST /webhooks/{source}, GET /livez, and GET /readyz onto core.Service.
+// POST /api/v1/webhooks/{source}, GET /livez, and GET /readyz onto core.Service.
 package http
 
 import (
@@ -20,7 +20,7 @@ type Handler struct {
 func NewHandler(service *core.Service, logger *slog.Logger, checks map[string]*health.Checker) *Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("POST /webhooks/{source}", handleWebhook(service, logger))
+	mux.HandleFunc("POST /api/v1/webhooks/{source}", handleWebhook(service, logger))
 	mux.HandleFunc("GET /livez", health.LivezHandler)
 	mux.HandleFunc("GET /readyz", health.ReadyzHandler(checks))
 
