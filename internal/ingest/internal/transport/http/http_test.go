@@ -85,27 +85,55 @@ const sonarrHealthIssuePayload = `{
 const sonarrTestPayload = `{"eventType": "Test"}`
 
 const unraidAlertPayload = `{
-  "importance": "alert",
-  "subject": "Disk 1 SMART error",
-  "description": "Disk 1 (sdb) has a SMART error"
+  "embeds": [
+    {
+      "title": "Disk 1 SMART error",
+      "description": "Disk 1 (sdb) has a SMART error",
+      "fields": [
+        {"name": "Description", "value": "Disk 1 (sdb) has a SMART error"},
+        {"name": "Priority", "value": "alert", "inline": true}
+      ]
+    }
+  ]
 }`
 
 const unraidWarningPayload = `{
-  "importance": "warning",
-  "subject": "Array usage high",
-  "description": "Array usage is at 92%"
+  "embeds": [
+    {
+      "title": "Array usage high",
+      "description": "Array usage is at 92%",
+      "fields": [
+        {"name": "Description", "value": "Array usage is at 92%"},
+        {"name": "Priority", "value": "warning", "inline": true}
+      ]
+    }
+  ]
 }`
 
 const unraidNormalPayload = `{
-  "importance": "normal",
-  "subject": "Array started",
-  "description": "The array was started successfully"
+  "embeds": [
+    {
+      "title": "Array started",
+      "description": "The array was started successfully",
+      "fields": [
+        {"name": "Description", "value": "The array was started successfully"},
+        {"name": "Priority", "value": "normal", "inline": true}
+      ]
+    }
+  ]
 }`
 
 const unraidResolutionPayload = `{
-  "importance": "normal",
-  "subject": "Notice [FERN] - Parity disk returned to normal temperature",
-  "description": "ST14000NM0121_ZKL2T0X9 (sde)"
+  "embeds": [
+    {
+      "title": "Notice [FERN] - Parity disk returned to normal temperature",
+      "description": "ST14000NM0121_ZKL2T0X9 (sde)",
+      "fields": [
+        {"name": "Description", "value": "ST14000NM0121_ZKL2T0X9 (sde)"},
+        {"name": "Priority", "value": "normal", "inline": true}
+      ]
+    }
+  ]
 }`
 
 func TestSonarrDownload(t *testing.T) {
@@ -331,17 +359,123 @@ func TestUnraidMalformedJSON(t *testing.T) {
 	}
 }
 
-func TestUnraidUnrecognizedImportance(t *testing.T) {
+func TestUnraidUnrecognizedPriorityDefaultsToInfo(t *testing.T) {
 	pub := &fakePublisher{}
 	srv := newTestServer(pub)
 	defer srv.Close()
 
-	resp := postWebhook(t, srv, "unraid", `{"importance": "critical", "subject": "s", "description": "d"}`)
+	payload := `{
+	  "embeds": [
+	    {
+	      "title": "s",
+	      "description": "d",
+	      "fields": [{"name": "Priority", "value": "critical", "inline": true}]
+	    }
+	  ]
+	}`
+	resp := postWebhook(t, srv, "unraid", payload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	if events[0].Severity != event.SeverityInfo {
+		t.Fatalf("unexpected event: %+v", events[0])
+	}
+}
+
+func TestUnraidMissingPriorityDefaultsToInfo(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	payload := `{"embeds": [{"title": "s", "description": "d"}]}`
+	resp := postWebhook(t, srv, "unraid", payload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	if events[0].Severity != event.SeverityInfo {
+		t.Fatalf("unexpected event: %+v", events[0])
+	}
+}
+
+func TestUnraidNoEmbeds(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "unraid", `{"embeds": []}`)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 	if len(pub.events()) != 0 {
 		t.Fatalf("published %d events, want 0", len(pub.events()))
+	}
+}
+
+func TestUnraidMissingTitle(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "unraid", `{"embeds": [{"description": "d"}]}`)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if len(pub.events()) != 0 {
+		t.Fatalf("published %d events, want 0", len(pub.events()))
+	}
+}
+
+func TestUnraidMissingDescription(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	resp := postWebhook(t, srv, "unraid", `{"embeds": [{"title": "s"}]}`)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if len(pub.events()) != 0 {
+		t.Fatalf("published %d events, want 0", len(pub.events()))
+	}
+}
+
+func TestUnraidExtraEmbedsIgnored(t *testing.T) {
+	pub := &fakePublisher{}
+	srv := newTestServer(pub)
+	defer srv.Close()
+
+	payload := `{
+	  "embeds": [
+	    {"title": "first", "description": "first desc", "fields": [{"name": "Priority", "value": "alert"}]},
+	    {"title": "second", "description": "second desc", "fields": [{"name": "Priority", "value": "warning"}]}
+	  ]
+	}`
+	resp := postWebhook(t, srv, "unraid", payload)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	events := pub.events()
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	e := events[0]
+	if e.Severity != event.SeverityCritical {
+		t.Fatalf("unexpected event: %+v", e)
+	}
+	data, ok := e.Data.(unraid.Data)
+	if !ok || data.Subject != "first" {
+		t.Fatalf("Data = %+v, want subject 'first'", e.Data)
 	}
 }
 
