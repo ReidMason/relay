@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -22,6 +23,7 @@ const (
 // it blocks for the broker's ack, so a publish failure propagates as an
 // error rather than being silently dropped.
 type Adapter struct {
+	nc *nats.Conn
 	js jetstream.JetStream
 }
 
@@ -46,7 +48,18 @@ func Connect(ctx context.Context, natsURL string) (*Adapter, error) {
 		return nil, fmt.Errorf("nats: ensure stream %s: %w", streamName, err)
 	}
 
-	return &Adapter{js: js}, nil
+	return &Adapter{nc: nc, js: js}, nil
+}
+
+// Ping actively round-trips to the NATS server, satisfying health.Pinger.
+// nats.go has no context-aware flush, so the ctx deadline is translated into
+// a FlushTimeout duration.
+func (a *Adapter) Ping(ctx context.Context) error {
+	timeout := 5 * time.Second
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = time.Until(deadline)
+	}
+	return a.nc.FlushTimeout(timeout)
 }
 
 // Publish blocks for the JetStream ack; a failure is returned as an error.

@@ -48,7 +48,7 @@ func newTestServer(publisher core.Publisher) *httptest.Server {
 		unraid.Source: unraid.New(),
 	}
 	service := core.NewService(parsers, publisher)
-	handler := transporthttp.NewHandler(service, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := transporthttp.NewHandler(service, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	return httptest.NewServer(handler)
 }
 
@@ -378,14 +378,14 @@ func TestPublisherFailure(t *testing.T) {
 	}
 }
 
-func TestHealthz(t *testing.T) {
+func TestLivez(t *testing.T) {
 	pub := &fakePublisher{}
 	srv := newTestServer(pub)
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/healthz")
+	resp, err := http.Get(srv.URL + "/livez")
 	if err != nil {
-		t.Fatalf("get healthz: %v", err)
+		t.Fatalf("get livez: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

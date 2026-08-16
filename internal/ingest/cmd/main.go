@@ -7,13 +7,22 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/ReidMason/relay/internal/event"
+	"github.com/ReidMason/relay/internal/health"
 	"github.com/ReidMason/relay/internal/ingest/internal/core"
 	"github.com/ReidMason/relay/internal/ingest/internal/sonarr"
 	transporthttp "github.com/ReidMason/relay/internal/ingest/internal/transport/http"
 	transportnats "github.com/ReidMason/relay/internal/ingest/internal/transport/nats"
 	"github.com/ReidMason/relay/internal/ingest/internal/unraid"
+)
+
+const (
+	healthCheckInterval = 2 * time.Second
+	healthCheckTimeout  = 1 * time.Second
 )
 
 func main() {
@@ -22,7 +31,10 @@ func main() {
 	natsURL := envOrDefault("NATS_URL", "nats://127.0.0.1:4222")
 	port := envOrDefault("PORT", "8080")
 
-	publisher, err := transportnats.Connect(context.Background(), natsURL)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	publisher, err := transportnats.Connect(ctx, natsURL)
 	if err != nil {
 		logger.Error("connect to nats", "error", err)
 		os.Exit(1)
@@ -34,11 +46,21 @@ func main() {
 	}
 
 	service := core.NewService(parsers, publisher)
-	handler := transporthttp.NewHandler(service, logger)
+
+	natsChecker := health.NewChecker(publisher, healthCheckInterval, healthCheckTimeout)
+	go natsChecker.Run(ctx)
+
+	handler := transporthttp.NewHandler(service, logger, map[string]*health.Checker{"nats": natsChecker})
 
 	addr := ":" + port
+	server := &http.Server{Addr: addr, Handler: handler}
+	go func() {
+		<-ctx.Done()
+		server.Close()
+	}()
+
 	logger.Info("starting ingest", "addr", addr)
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	if err := server.ListenAndServe(); err != nil && ctx.Err() == nil {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}

@@ -9,11 +9,18 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/ReidMason/relay/internal/event"
+	"github.com/ReidMason/relay/internal/health"
 	"github.com/ReidMason/relay/internal/notifier/internal/core"
 	"github.com/ReidMason/relay/internal/notifier/internal/transport/discord"
 	transportnats "github.com/ReidMason/relay/internal/notifier/internal/transport/nats"
+)
+
+const (
+	healthCheckInterval = 2 * time.Second
+	healthCheckTimeout  = 1 * time.Second
 )
 
 // unraid.Source and sonarr.Source live under internal/ingest/internal/... and
@@ -61,10 +68,12 @@ func main() {
 		}
 	}()
 
+	natsChecker := health.NewChecker(consumer, healthCheckInterval, healthCheckTimeout)
+	go natsChecker.Run(ctx)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+	mux.HandleFunc("GET /livez", health.LivezHandler)
+	mux.HandleFunc("GET /readyz", health.ReadyzHandler(map[string]*health.Checker{"nats": natsChecker}))
 
 	addr := ":" + port
 	logger.Info("starting notifier", "addr", addr)

@@ -58,3 +58,26 @@ low-severity Event is still worth delivering. A parser decides Resolution
 using whatever real signal that vendor gives; notifier never infers it from
 Source/Type.
 _Avoid_: Recovery, Clear, Resolved-flag
+
+**Liveness** (`/livez`):
+Unconditional signal that a service's process is up and serving HTTP — no
+dependency checks, always 200. Answers "should this be restarted," never
+"should this receive traffic." See ADR-0002.
+_Avoid_: Healthz, Health check (too generic — this repo distinguishes
+Liveness from Readiness, so "health check" alone is ambiguous about which)
+
+**Readiness** (`/readyz`):
+Signal that a service can currently do its job — i.e. its required
+dependencies (NATS JetStream) are reachable. Answers "should this receive
+traffic." Backed by a cached `Checker` result (see Checker), not a live
+per-request probe. Excludes best-effort/outbound dependencies like Discord —
+see ADR-0002 for why. Returns 503 with the failing check(s) named until the
+first successful probe completes.
+_Avoid_: Healthz, Health check
+
+**Checker**:
+The `internal/health` component that pings a dependency on a fixed interval
+(2s) and caches the last result for `readyz` to read, so request volume never
+multiplies load on the dependency being checked. Pings through the small
+`Pinger` interface, not a concrete client type — see ADR-0002.
+_Avoid_: Health monitor, Prober

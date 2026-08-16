@@ -1,5 +1,5 @@
 // Package http is the HTTP transport adapter for ingest: it wires
-// POST /webhooks/{source} and GET /healthz onto core.Service.
+// POST /webhooks/{source}, GET /livez, and GET /readyz onto core.Service.
 package http
 
 import (
@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/ReidMason/relay/internal/health"
 	"github.com/ReidMason/relay/internal/ingest/internal/core"
 )
 
@@ -16,11 +17,12 @@ type Handler struct {
 	mux *http.ServeMux
 }
 
-func NewHandler(service *core.Service, logger *slog.Logger) *Handler {
+func NewHandler(service *core.Service, logger *slog.Logger, checks map[string]*health.Checker) *Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /webhooks/{source}", handleWebhook(service, logger))
-	mux.HandleFunc("GET /healthz", handleHealthz)
+	mux.HandleFunc("GET /livez", health.LivezHandler)
+	mux.HandleFunc("GET /readyz", health.ReadyzHandler(checks))
 
 	return &Handler{mux: mux}
 }
@@ -61,8 +63,4 @@ func handleWebhook(service *core.Service, logger *slog.Logger) http.HandlerFunc 
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	}
-}
-
-func handleHealthz(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
 }

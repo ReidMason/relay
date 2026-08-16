@@ -38,6 +38,7 @@ type EventHandler interface {
 // across concurrent pullers on the same durable, so running multiple
 // replicas needs no extra configuration).
 type Adapter struct {
+	nc       *nats.Conn
 	consumer jetstream.Consumer
 	handler  EventHandler
 	logger   *slog.Logger
@@ -80,7 +81,18 @@ func Connect(ctx context.Context, natsURL string, handler EventHandler, logger *
 		return nil, fmt.Errorf("nats: ensure consumer %s: %w", consumerName, err)
 	}
 
-	return &Adapter{consumer: consumer, handler: handler, logger: logger}, nil
+	return &Adapter{nc: nc, consumer: consumer, handler: handler, logger: logger}, nil
+}
+
+// Ping actively round-trips to the NATS server, satisfying health.Pinger.
+// nats.go has no context-aware flush, so the ctx deadline is translated into
+// a FlushTimeout duration.
+func (a *Adapter) Ping(ctx context.Context) error {
+	timeout := 5 * time.Second
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = time.Until(deadline)
+	}
+	return a.nc.FlushTimeout(timeout)
 }
 
 // Run pulls messages in a loop until ctx is cancelled. Each message is
